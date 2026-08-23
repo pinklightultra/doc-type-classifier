@@ -1,0 +1,17 @@
+<h1>Runbook: Queue Backlog</h1>
+<p>Internal runbook. Use it when a work queue stops draining and items pile up
+past the agreed depth.</p>
+
+<h2>Trigger: queue depth above the threshold for two hours</h2>
+<p>The depth alert fires on the scheduled check, not in real time, so confirm the
+current depth before acting.</p>
+
+<h2>First checks</h2>
+<ul>
+  <li>Confirm the queue processor is running.</li>
+  <li>Check whether one oversized batch is blocking everything behind it.</li>
+</ul>
+
+<h2>Escalation</h2>
+<p>If depth is still rising after the first checks, page the on-call rota and
+record the start time in the incident channel.</p>

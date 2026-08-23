@@ -1,0 +1,213 @@
+{
+ "name": "default",
+ "release_note_categories": [
+  "release notes"
+ ],
+ "config_categories": [
+  "configuration instructions"
+ ],
+ "internal_categories": [
+  "product definitions"
+ ],
+ "release_note_tags": [
+  "release-notes"
+ ],
+ "imported_tags": [
+  "imported"
+ ],
+ "internal_tags": [
+  "product-definitions"
+ ],
+ "faq_tags": [
+  "faq"
+ ],
+ "overview_tags": [
+  "overview",
+  "getting-started",
+  "onboarding"
+ ],
+ "crud_verbs": [
+  "create",
+  "add",
+  "edit",
+  "delete",
+  "update",
+  "remove",
+  "manage",
+  "configure",
+  "clone",
+  "split",
+  "upload",
+  "assign",
+  "convert",
+  "generate",
+  "go to",
+  "access"
+ ],
+ "overview_words": [
+  "overview",
+  "introduction",
+  "about",
+  "what is",
+  "what are",
+  "getting started"
+ ],
+ "screen_words": [
+  "tab",
+  "window",
+  "screen",
+  "fields",
+  "buttons",
+  "claims"
+ ],
+ "screen_words_loose": [
+  "tab",
+  "window",
+  "screen",
+  "fields",
+  "level"
+ ],
+ "canonical_rn_headings": [
+  "what's new",
+  "whats new",
+  "why it matters",
+  "who is impacted",
+  "enabled by default"
+ ],
+ "config_step_headings": [
+  "configuration steps",
+  "system variable",
+  "configuration sql"
+ ],
+ "metadata_headings": [
+  "jira epic",
+  "document type",
+  "solution area",
+  "related release note"
+ ],
+ "api_headings": [
+  "authentication",
+  "endpoint",
+  "request",
+  "response",
+  "data schema",
+  "error handling",
+  "api endpoints",
+  "api details",
+  " api",
+  "cds hooks"
+ ],
+ "config_context_word": "configuration",
+ "config_context_headings": [
+  "managing",
+  "creating",
+  "navigation"
+ ],
+ "faq_headings": [
+  "faqs"
+ ],
+ "faq_title_words": [
+  "faq",
+  "setup and faq"
+ ],
+ "index_title_words": [
+  "resolved issues",
+  "patch notes",
+  "service pack"
+ ],
+ "screenref_headings": [
+  "right click",
+  "column options",
+  "table options",
+  "window"
+ ],
+ "action_verbs": [
+  "add",
+  "create",
+  "edit",
+  "delete",
+  "complete",
+  "configure",
+  "assign",
+  "split",
+  "link",
+  "upload",
+  "convert",
+  "generate"
+ ],
+ "raw_import_headings": [
+  "learning objectives",
+  "table of contents",
+  "contact us"
+ ],
+ "raw_import_heading_prefixes": [
+  "sheet:"
+ ],
+ "engineering_headings": [
+  "ticket summary",
+  "architecture summary",
+  "design decisions",
+  "hibernate",
+  "junit",
+  "flyway",
+  "terraform",
+  "implementation plan"
+ ],
+ "engineering_slug_markers": [
+  "implementation-plan",
+  "implementation-summary",
+  "test-results"
+ ],
+ "engineering_title_markers": [
+  "test-results"
+ ],
+ "runbook_title_prefixes": [
+  "runbook"
+ ],
+ "runbook_headings": [
+  "trigger:",
+  "escalation"
+ ],
+ "prd_headings_a": [
+  "success metrics",
+  "assumptions",
+  "purpose"
+ ],
+ "prd_headings_b": [
+  "key features",
+  "requirements",
+  "deployment activities"
+ ],
+ "bundle_headings": [
+  "why bundle",
+  "starter bundle",
+  "included apis"
+ ],
+ "template_headings": [
+  "provide a brief",
+  "placeholder"
+ ],
+ "code_sample_headings": [
+  "sample request",
+  "data models",
+  "payload",
+  "bundle"
+ ],
+ "code_sample_title_prefixes": [
+  "sample"
+ ],
+ "stub_max_chars": 60,
+ "template_max_chars": 300,
+ "thin_prose_max_chars": 250,
+ "master_min_chars": 15000,
+ "code_sample_min_chars": 3000,
+ "index_min_links": 15,
+ "master_min_tables": 4,
+ "master_min_sections": 3,
+ "master_min_field_tables": 4,
+ "caps_heading_min_count": 2,
+ "caps_heading_min_len": 5,
+ "version_title_pattern": "^\\d+\\.\\d+(\\.\\d+)*\\b.*release notes?$|service pack",
+ "bare_version_pattern": "^\\d+\\.\\d+\\.\\d+",
+ "uuid_slug_pattern": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}"
+}

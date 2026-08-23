@@ -1,0 +1,63 @@
+# Fingerprint and score caches. These are derived from whatever corpus you point
+# the tool at, which means they carry your document titles and heading text. On the
+# corpus this was built against they would leak customer names, so they are ignored
+# rather than merely untracked.
+fingerprints*.json
+predictions*.json
+rlhf_round*.json
+labels*.json
+gold*.json
+scores*.json
+
+# Belt and braces for two filenames that the patterns above do not catch and that
+# must never be published. The gold label set carries real article slugs, and the
+# long-form taxonomy draft carries a literal list of customer names. Neither is
+# present in this repository; these lines exist so that dropping one in here by
+# accident cannot stage it.
+rlhf_gold_*.json
+ARTICLE_TAXONOMY.md
+
+# Corpora. Do not commit somebody else's documentation.
+corpus/
+docs/
+export/
+*.html
+*.htm
+
+# One exception: examples/docs/ is a five-file synthetic fixture written for this
+# repository, so that the README transcript is reproducible. It contains no real
+# documentation. Re-including it takes three lines because the `docs/` rule above
+# excludes the directory itself and the `*.html` rule excludes the files in it.
+!examples/docs/
+!examples/docs/**/
+!examples/docs/**/*.html
+
+# Your edited profile, if you keep it here. profiles/default.json is committed.
+my-profile.json
+profiles/*.json
+!profiles/default.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Test and tooling
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

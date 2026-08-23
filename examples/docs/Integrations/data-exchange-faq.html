@@ -1,0 +1,16 @@
+<h1>Data Exchange FAQ</h1>
+<p>Common questions about the outbound data exchange feed.</p>
+
+<h2>How often does the feed run?</h2>
+<p>Once a day, on a schedule you set separately for each environment.</p>
+
+<h2>What happens when a file is rejected?</h2>
+<p>The file is retried twice, then listed in the exchange log for a person to
+look at. Nothing is deleted.</p>
+
+<h2>Can two feeds share one destination?</h2>
+<p>Yes. Give each feed its own filename prefix so the destination folder stays
+readable.</p>
+
+<h2>Where do I see the last run?</h2>
+<p>Open the exchange log and sort by run time. The newest run is at the top.</p>

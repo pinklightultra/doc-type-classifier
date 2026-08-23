@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "doc-type-classifier"
+version = "1.0.0"
+description = "Tell documentation types apart by structure alone: rule-based, auditable, no model"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Justin Severn" }]
+keywords = ["documentation", "classification", "taxonomy", "html", "technical-writing"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Text Processing :: Markup :: HTML",
+]
+dependencies = ["beautifulsoup4>=4.9"]
+
+# NOTE: no [project.urls] block. Add your own repository URL after you push; an
+# invented one is worse than a missing one.
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+doctype = "doctype.cli:main"
+
+[tool.setuptools]
+packages = ["doctype"]
+
+# The shipped profile is defined in code (taxonomy.Profile defaults), not loaded
+# from a file, so there is no package data to install. profiles/default.json in
+# the repo is a dump of those defaults for you to copy and edit -- regenerate it
+# any time with `doctype profile > profiles/default.json`.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

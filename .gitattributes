@@ -1,0 +1,3 @@
+# Normalize to LF in the repository and on checkout. Everything here is Python,
+# JSON or Markdown, all of which are LF-clean on every platform this runs on.
+* text=auto eol=lf

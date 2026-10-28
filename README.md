@@ -1,269 +1,206 @@
 # doc-type-classifier
 
-Tell documentation types apart by structure alone. Feed it HTML, get back one of
-thirteen types plus the reason it decided that.
+`doctype` reads one HTML documentation page and returns one of thirteen structural types, plus the name of the rule that fired. It is for technical writers and docs engineers who have a directory of exported articles and need to route quality checks by document shape.
+
+Parsing uses BeautifulSoup. The decision itself is an ordered list of rules over a small structural fingerprint: fifteen integer counts, the heading text, and whatever title, slug, category, and tags you pass in. There is no model and no training step.
+
+## Problem
+
+I was running a knowledge base of 1,806 published articles and wanted a quality scan over all of them. The first version applied every check to every article. Nearly every false positive came from that:
+
+- A short concept page was flagged as a truncated how-to.
+- A role matrix was flagged as a malformed field table.
+- A link index was flagged as an article with no content.
+
+The scan became usable once it classified the document first, ran only the checks that fit the type, and suppressed the rest. That turns a pile of findings into a list a writer can act on.
+
+The type has to be explainable to the person whose article was flagged. "This fired because the heading `Configuration Steps` is present" is an argument. When the call is wrong, you can read the rule that misfired and edit that one rule.
+
+## Method
+
+The package is split in two, and the split is the whole design.
+
+**Fingerprint.** `fingerprint()` parses with the stdlib HTML parser (no lxml build) and reduces the page to a JSON-serializable dict. The fifteen counts are `chars`, `h`, `h2`, `h3`, `h4`, `tables`, `fieldish_tables`, `ol`, `ul`, `li`, `img`, `pre`, `strong`, `links`, and `p`. Heading text is kept for the first twenty headings (`heading_txt`); the heading counts include every heading. A parser is required for the counts. A regular expression mis-counts a nested table, or a `>` inside an attribute, and a wrong count becomes a confident wrong type with nothing logged.
+
+**Classify.** `classify()` reads that dict and returns `(type_code, reason)`. Missing keys count as zero, so a partial fingerprint still classifies. The reason names the rule that fired. On a compound rule it does not say which clause matched.
+
+The current rules consult `chars`, `ol`, `tables`, `fieldish_tables`, `pre`, `links`, `h2`, and `h3`, plus title, slug, tags, category, and heading text. `ul`, `li`, `img`, `strong`, `p`, `h`, and `h4` are recorded and then ignored. Procedure looks for an ordered list (`ol`). A bullet list and a screenshot do not move the type.
+
+A field table means the first cell of the first row is bold (`strong` or `b`). That is an authoring convention, implemented in `fingerprint._is_field_table`. `pre` counts `<pre>` and `<code>` elements together, including a `<code>` nested in a `<pre>`.
+
+Category names, heading phrases, and size thresholds live in `taxonomy.Profile`. The shipped profile was tuned on one knowledge base. Retargeting means editing the profile. Two English title words, `bundle` and `template`, stay in `classify()`; they are called out under retargeting. An unknown profile key raises `ValueError` and names itself. A typo that was ignored would leave a rule on its default and look like a change in the corpus.
+
+The thirteen codes are fixed in `doctype.taxonomy.TYPES`. Changing that dict changes what the classifier is for.
+
+### The thirteen types
+
+| Code | Type | What the rule keys on |
+|---|---|---|
+| T1 | Overview / Concept | An overview-shaped title or an overview tag; thin prose; unstructured prose. Also a release-note page with no table and no ordered list. |
+| T2 | Task / Procedure | An ordered list, a heading that starts with an action verb (`Add a Rule`), or a title that starts with a CRUD verb (`Create`, `Edit`, `Delete`, …). |
+| T3 | Field / Screen Reference | A field table and no ordered list, or any table plus a screen-ish title or a UI heading (`column options`, `window`). Structured pages that matched nothing earlier land here. |
+| T4 | Config Instruction | A metadata heading, a `Configuration Steps` / `System Variable` / `Configuration SQL` heading, two headings that are entirely `^[A-Z][A-Z0-9_]{5,}$` (six characters or more), the config category plus an ordered list, or a field table plus a system-variable marker. |
+| T5 | Release Note (canonical) | Release-note category or tag, and a canonical section heading (`What's New`, `Why It Matters`, `Who Is Impacted`, `Enabled by Default`). |
+| T6 | Release Note (legacy) | The same gate, with a table and none of those headings. Also the fallback for anything else inside the gate. |
+| T7 | Index / Landing / Rollup | The same gate, and a version or rollup title, an index title (`resolved issues`, `patch notes`, `service pack`), or no tables and more than 15 links. |
+| T8 | API Spec | A contract heading (`Authentication`, `Endpoint`, `Request`, `Response`, …) plus a field table, a `pre` or `code` element, any table, or the substring `api` in the title. |
+| T9 | Code Sample / Payload | No `pre` or `code`, more than 3,000 characters, and a title starting with `Sample` or a heading such as `Sample Request`, `Data Models`, `Payload`, or `Bundle`. |
+| T10 | FAQ | An `faq` tag, `faq` in the title, or an `faqs` heading. |
+| T11 | Long-form Master Guide | More than 15,000 characters, and at least four tables, or three `h2`s, or three `h3`s, or four field tables. |
+| T12 | Internal / Non-content | An `imported` tag, a UUID-shaped slug, raw-import or engineering markers, a runbook title or a `Trigger:` / `Escalation` heading, an internal category or tag, a heading from both PRD groups, a `bundle` title plus a bundle heading, or a template skeleton. |
+| STUB | Stub / empty | Fewer than 60 characters of text. This test runs first. |
+
+Thresholds above are the shipped profile (`stub_max_chars` 60, `code_sample_min_chars` 3000, `master_min_chars` 15000, `index_min_links` 15, and the master-guide structure minimums). They are profile fields.
+
+The type names describe the corpus the taxonomy was collapsed from: roughly forty category-local types in that 1,806-article base, reduced to one primary type per document. Longer signatures, and the quality checks each type should attract or suppress, are in [TAXONOMY.md](TAXONOMY.md). Where the type name and the `if` disagree, the `if` is the behavior.
+
+**T9 fires only on an unfenced payload.** `pre` must be 0. A sample wrapped in `<pre>` or `<code>` never classifies as T9; those headings usually satisfy the API rule and land on T8. The rule does not look for braces and does not parse the body as JSON. Prose past the size threshold under a `Payload` heading matches.
+
+**T4's category gate is wider than the comment above it.** The config category alone does not match, which the tests lock. The config category plus one ordered list does match, and so does one config-step heading, or two headings whose whole text matches `^[A-Z][A-Z0-9_]{5,}$`, in any category. One such heading is not enough on its own. A plain how-to filed under the config category classifies as T4. The reason string still says `config instruction (metadata / system-variable / config-steps marker)` when the document has none of those markers. The shipped profile has no `config_tags` field.
+
+**T8's second signal includes the title.** The contract vocabulary has to appear in a heading. The other half is then a field table, a `pre` or `code` element, any table, or the substring `api` in the title. A page titled "Partner API Integration Overview" with an `Authentication` heading and no table, list, or code block classifies as T8.
+
+### Precedence
+
+The types overlap. A release note contains steps. A long config guide is also a master guide. The first matching rule wins. That order is the specification: read `classify()` from the stub test down to the fallthrough.
+
+Three orderings carry the design. Each one showed up as a block of errors in the confusion matrix, and the fix was to test the more specific claim first.
+
+1. **Non-content before every content type.** An engineering dump that contains ordered steps is a document that should not have been published. The stub test is the exception that runs even earlier: under 60 characters, an `imported` tag is never consulted.
+2. **FAQ before API.** An integration page with an `faq` tag, a table, and `Authentication` / `Endpoint` headings satisfies the API rule. FAQ is tested first, so it stays T10. `test_faq_beats_api` locks that.
+3. **Config and the master guide before procedure.** Both routinely contain ordered lists. "Has an `ol`" is a weaker signal than a system-variable marker, or than 20,000 characters across several sections.
+
+Release notes are a closed branch. A release-note tag or a release-note category resolves to exactly one of T7, T5, T1, or T6, and the function returns inside that branch. Nothing outside the gate can become T5, T6, or T7.
+
+After those branches, procedure wins over a field table when a heading starts with an action verb: "Add a Rule" above a field table is a how-to. Prose that matches nothing falls through to T1. Structured residue falls through to T3. The prose default was a measured change: an unstructured page was more often a short explanation than a broken table.
+
+## Result
+
+The five files in [`examples/docs/`](examples/docs) are synthetic fixtures written to land on five different types. They demonstrate the command. They are not an accuracy set.
+
+```bash
+doctype classify examples/docs/ --category-from-dir
+```
 
 ```
-$ doctype classify examples/docs/ --category-from-dir
-  create-a-case          T2    Task / Procedure          procedural (ordered steps / action headings / imperative title)
   data-exchange-faq      T10   FAQ                       faq / setup+faq
-  record-detail-tab      T3    Field / Screen Reference  field / screen reference (table, no steps)
+  create-a-case          T2    Task / Procedure          procedural (ordered steps / action headings / imperative title)
   2.4-release-notes      T7    Index / Landing / Rollup  version / rollup landing page
   runbook-queue-backlog  T12   Internal / Non-content    support runbook (internal)
+  record-detail-tab      T3    Field / Screen Reference  field / screen reference (table, no steps)
 
-      1  T2    Task / Procedure
       1  T10   FAQ
-      1  T3    Field / Screen Reference
+      1  T2    Task / Procedure
       1  T7    Index / Landing / Rollup
       1  T12   Internal / Non-content
+      1  T3    Field / Screen Reference
       5  total
 ```
 
-That is a real transcript, and it is runnable: the five HTML files it reads ship in
-[`examples/docs/`](examples/docs), so after `pip install -e .` that command prints
-those exact lines for you. They are synthetic fixtures written to land on five
-different types, which demonstrates the CLI rather than the accuracy. What is not
-shipped here is a corpus -- there is none, and no corpus this was tuned against can
-be published. `--category-from-dir` is load-bearing: the T7 row needs the file's
-parent directory (`examples/docs/Release Notes/`) to name your release-note
-category, and a plain `doctype classify examples/docs/` reports that same file as
-T1 instead. See [Reachability from the CLI](#reachability-from-the-cli).
+That is the transcript from this tree. Filenames inside a directory are sorted. Directory order follows the filesystem walk, so another machine may print the same five rows in a different order. The type on each file stays the same. The summary lists types in the order they were first seen, because every count is 1.
 
-No model, no training, no network. `classify` reads a dict of 15 integers plus the
-heading text, and returns in microseconds; the only dependency is BeautifulSoup,
-and that is just for counting tags.
+`--category-from-dir` is load-bearing for the T7 row. The command line has no CMS metadata. The flag sets each file's category to the basename of its parent directory, here `Release Notes`, which is a name in the shipped profile. Without the flag the release-note branch never opens, and that file is T1:
 
-## Why this exists
+```
+  2.4-release-notes      T1    Overview / Concept        prose fallthrough -> concept
+```
 
-I was running a knowledge base of 1,806 published articles and wanted an
-automated quality scan over all of them. The first version applied every check to
-every article, and nearly every false positive came from that: a short concept
-page flagged as a truncated how-to, a role matrix flagged as a malformed field
-table, a link index flagged as an article with no content.
+Category match is exact after lowercasing. It is not hierarchical. `Release Notes` matches. `4.2 Release Notes` does not. The same flag is what makes T4's config-category branch and T12's internal-category branch reachable from the CLI. See [What the command line cannot reach](#what-the-command-line-cannot-reach).
 
-The fix was routing. Classify the document first, then run only the checks that
-fit its type and suppress the ones that do not. That turns "289 problems" into
-something a person can act on.
+### What 84.2% measures
 
-Rules rather than a model, for two reasons. The scan has to justify itself to the
-writer whose article got flagged, and "this fired because the heading `Configuration
-Steps` is present" is an argument while a 0.83 confidence score is not. And when
-the classifier is wrong you can read the rule that misfired and edit that one
-rule, which is a five-minute loop instead of a relabel-and-retrain loop.
+On a 146-article sample from the 1,806, the rules agree with the labels on 123 (84.2%). Those 146 articles are the set the rules were tuned on, over four rounds, scoring the same items each round. The figure is training accuracy. This repository contains no held-out split, no cross-validation, and no second labeled set. You cannot recompute it from the files here: the articles and their slugs are private.
+
+| Round | Accuracy | What changed |
+|---|---|---|
+| v0 | 67.1% | Rules transcribed from the written taxonomy |
+| v1 | 75.3% | Config required more than the category; API required the contract vocabulary plus a second signal; FAQ moved above API; prose defaults to concept |
+| v2 | 82.2% | Config and the master guide moved above procedure; the master guide keyed on size; action-verb headings win over a field table |
+| v3 | 84.2% | Spec imports and marketing prose routed to non-content; two ALL_CAPS headings imply config |
+
+The labels came from four independent LLM agents. Each agent read the article, applied the written taxonomy, and did not see these rules. Each label carried a confidence and a one-line justification. That is a proxy for a human adjudication. Some of the 23 disagreements are probably the label.
+
+On that same set, API-spec precision was 50% (support 7), master-guide recall was 62% (support 8), and stub recall was 71% (support 7). FAQ and code sample were both 100%; code sample had a support of 1. Five of the thirteen types had support under 10. Per-type figures at that size are anecdotes.
+
+I stopped at v3 because the remaining misses were almost all one-count boundary cases, plus articles the labeling agents had already marked low-confidence where two types fit. Another rule edit would have fit those 146 items more tightly.
+
+The code in this repository was refactored out of that working copy: the vocabulary moved into a profile. The refactor was checked to classify all 1,806 documents the same way and to reproduce 123/146 with the same confusion matrix. The tests in this repository do not, and cannot, repeat that check. They assert rule behavior on hand-built fingerprints. For a figure on your own export, label a sample and run `doctype score`.
+
+With the shipped profile and no tuning, a different knowledge base will score worse until the category names, tags, and headings match yours.
 
 ## Install
+
+Python 3.9 or newer. The only runtime dependency is BeautifulSoup, and it is used to count tags.
 
 ```bash
 git clone https://github.com/pinklightultra/doc-type-classifier
 cd doc-type-classifier
-pip install -e .          # or: pip install -e ".[test]"
+pip install -e .
 ```
 
-Python 3.9+. One runtime dependency. Not on PyPI, so the editable install from a
-clone is the only install there is.
+That puts `doctype` on your path. This repository is the distribution; `pyproject.toml` has no package-index metadata.
+
+To run the tests as well:
+
+```bash
+pip install -e ".[test]"
+pytest -q
+```
 
 ## Use
 
-As a library:
+Classify a directory of HTML. You can do that before reading a rule.
+
+```bash
+doctype classify docs/                         # a row per file, then a count per type
+doctype classify docs/ --json                  # one JSON object per file
+doctype classify docs/ --category-from-dir     # parent directory name becomes the category
+doctype fingerprint docs/ -o fps.json          # write the structural counts
+doctype score fps.json labels.json             # accuracy, disagreements, per-type recall and precision
+doctype score fps.json labels.json --detail    # and list every miss
+doctype score fps.json labels.json --expect 123  # exit 1 unless exactly 123 are correct
+doctype profile > my-profile.json              # dump the vocabulary so you can edit it
+doctype --profile my-profile.json classify docs/
+```
+
+`classify` prints the slug (cut at 60 characters), the type code, the type name (cut at 24 characters), and the reason. A trailing block counts files per type. `--json` emits `path`, `slug`, `type`, `name`, `reason`, and `chars`. A directory that contains no `.html` or `.htm` file prints `no HTML files found` on stderr and exits 1. Directory walks keep those two suffixes; a path you pass as a file is read whatever the suffix is.
+
+The title is the filename stem, with hyphens and underscores turned into spaces. Several rules key on the title, and an empty title loses matches. The CLI does not read a `<title>` element. An `<h1>` is stored with the other headings; it is not copied into the title field. `create-a-case.html` is titled "create a case", which is enough for the procedural rule on its own. `data-exchange-faq.html` matches because the title contains `faq`.
+
+CRUD verbs are prefixes of the title, with no word boundary, so a stem `created-widgets` is also T2. Action-verb headings use a word boundary. Title and heading phrases match as substrings; tags match as whole values.
+
+`fingerprint` exists so a corpus is parsed once. Rule edits then re-score against the JSON. That loop is how the four rounds above were run. Files are read as UTF-8 with or without a BOM; an undecodable byte is replaced, so one bad file does not abort the sweep.
+
+`score` joins fingerprints to labels on `slug` and skips any fingerprint with an `error` key. Labels may be a list of `{"slug", "label"}` objects, a `{"labels": [...]}` wrapper, or a flat `{"slug": "T2"}` mapping. `--expect` is the regression gate for a labeled cache you keep outside this repository.
+
+### From Python
 
 ```python
 from doctype import classify, fingerprint
 
+html = open("create-a-case.html", encoding="utf-8").read()
 fp = fingerprint(html, title="Create a Case", top="How-To", tags=["procedure"])
 code, why = classify(fp)
 # ("T2", "procedural (ordered steps / action headings / imperative title)")
 ```
 
-The two halves are separate on purpose. Fingerprinting parses HTML and is the slow
-part; classifying is pure arithmetic over the result. Fingerprint your corpus once
-to a JSON file, then re-run the rules against it as many times as you like. That
-loop is the only reason the rules ever converged.
+`top` is the category name. `tags` are exact values, lowercased. `fingerprint_many()` takes a sequence of `{html, title, slug, top, tags, ...}` mappings. A document that raises is returned as `{"error": "..."}` plus its title, slug, and category, and the sweep continues. Check `error` before you classify. An errored fingerprint has no counts, every missing count reads as zero, and the result is STUB.
 
-From the command line:
+### What the command line cannot reach
 
-```bash
-doctype classify docs/                      # table plus a type distribution
-doctype classify docs/ --json               # machine-readable
-doctype fingerprint docs/ -o fps.json       # cache the structural counts
-doctype score fps.json labels.json          # accuracy, confusion matrix, per-type
-doctype score fps.json labels.json --expect 123   # nonzero exit if it moved
-doctype profile > my-profile.json           # dump the vocabulary, to edit
-doctype --profile my-profile.json classify docs/
-```
+`doctype classify` and `doctype fingerprint` pass a title, a slug, and — only with `--category-from-dir` — a category. They never pass tags.
 
-`--category-from-dir` uses each file's parent directory as its category, which is
-usually what you want when your export mirrors the CMS hierarchy.
+A rule whose only gate is a tag cannot fire from the CLI. In the shipped profile that is the `imported` tag, one of the T12 rules. Where a tag is one of several alternatives, the other half still fires: FAQ from the title or an `faqs` heading, overview from the title, internal from the category, release note from the category.
 
-### Reachability from the CLI
+Without a category, T5, T6, and T7 are unreachable. All three sit behind the release-note gate, and the CLI has no other way to open it. The library call `fingerprint(html, title=..., top=..., tags=...)` takes the metadata the files do not carry, so every rule is reachable from Python.
 
-The CLI reads files off a disk, and files on a disk have no CMS metadata. That
-makes the command line strictly weaker than the library, in two ways worth knowing
-before you conclude a rule is broken.
-
-- **The CLI never supplies tags.** `doctype classify` and `doctype fingerprint`
-  pass a title, a slug and optionally a category, and nothing else. Any rule whose
-  only gate is a tag therefore cannot fire from the command line -- in the shipped
-  profile that is the `imported` tag rule for T12. Rules where a tag is one of
-  several alternatives (FAQ, overview, internal, release note) still fire on their
-  title, heading or category half.
-- **Without `--category-from-dir` there is no category, and three types become
-  unreachable.** T5, T6 and T7 all live behind the release-note gate, and that gate
-  opens on a release-note tag or a release-note category. With neither, the whole
-  branch is skipped, so no file can classify as a release note or a rollup no
-  matter what is in it. The same flag is what makes T4's config-category branch and
-  T12's internal-category branch reachable.
-
-With `--category-from-dir`, the parent directory name has to match a name in your
-profile's category lists. Matching is exact after lowercasing and is not
-hierarchical, so a directory named `Release Notes` matches the default profile and
-a directory named `4.2 Release Notes` does not.
-
-None of this applies to the library. `fingerprint(html, title=..., top=..., tags=...)`
-takes all of it, so every rule is reachable from Python.
-
-## The thirteen types
-
-| Code | Type | What it looks like |
-|---|---|---|
-| T1 | Overview / Concept | prose, "Overview"/"About"/"What is" title, no ordered steps |
-| T2 | Task / Procedure | imperative title, `ol` present, step-and-result, screenshots |
-| T3 | Field / Screen Reference | Field \| Description table, no steps, screen-ish title |
-| T4 | Config Instruction | metadata table, `Configuration Steps`, ALL_CAPS variable names |
-| T5 | Release Note (canonical) | attribute table plus What's New / Why / Who headings |
-| T6 | Release Note (legacy) | attribute table only, pre-schema wording |
-| T7 | Index / Landing / Rollup | version title, no tables, high link count |
-| T8 | API Spec | auth / endpoint / request / response headings, field tables |
-| T9 | Code Sample / Payload | body is a payload *and* nothing is fenced -- see the note below |
-| T10 | FAQ | `faq` tag, question headings, "Setup and FAQs" |
-| T11 | Long-form Master Guide | over 15k characters with heavy sectioning |
-| T12 | Internal / Non-content | engineering dump, raw import, runbook, template skeleton |
-| STUB | Stub / empty | under 60 characters of text |
-
-Longer signatures, and the checks each type should and should not attract, are in
-[TAXONOMY.md](TAXONOMY.md).
-
-T9 is narrower than its name. The rule requires `pre == 0`, so it is a detector for
-an *unfenced* payload rather than for payloads in general: a code sample that is
-correctly wrapped in `<pre>` or `<code>` never classifies as T9, and generally
-lands on T8 instead because the same headings satisfy the API contract test. Read
-T9 as "this is a payload and it is also a formatting defect". The rule keys on size
-and on the payload vocabulary (`sample` in the title, or a heading like `Sample
-Request` or `Payload`); it does not inspect the text for braces or attempt to parse
-it as JSON, so prose over the size threshold under one of those headings will
-match.
-
-## How it decides
-
-The types genuinely overlap. A release note is also a procedure. A long config
-guide is also a master guide. There is no clean feature boundary, so resolution is
-ordered: the most specific claim wins, and precedence is encoded as nothing more
-than the order of the `if` statements in `classify()`. Read that function top to
-bottom and you have read the entire specification. It is 185 lines including its
-docstring, of which the `if` cascade itself is about 115.
-
-Three orderings are load-bearing and each one cost accuracy to find:
-
-- **Non-content before everything.** An engineering dump with ordered steps in it
-  is not a how-to, it is something that should not have been published.
-- **FAQ before API.** An integration page titled "Setup and FAQs" matches the API
-  contract vocabulary and gets classified as a spec otherwise.
-- **Config and master guide before procedure.** Both routinely contain ordered
-  steps, and "has ordered steps" is a much weaker signal than "has a
-  system-variable table" or "is 20,000 characters with nine sections".
-
-Two rules are gated tighter than the bare category, and in both cases the gate is
-looser than the intent behind it. Read them as written rather than as described.
-
-**Config instruction.** The config category alone does not fire it -- but the config
-category *plus a single ordered list* does, and so does one heading matching
-`Configuration Steps` or `System Variable`, or two ALL_CAPS headings, anywhere in
-the document regardless of category. The rationale for the gate was that ordered
-steps filed under a config category are usually just a procedure, and the rule does
-not actually enforce that: a plain how-to in the config category classifies as T4,
-with a reason string naming a marker it does not have. There is no config *tag*
-gate at all; the shipped profile has no `config_tags` field.
-
-**API spec.** It requires the contract vocabulary and then any one of a field
-table, a `pre` or `code` element, any table at all, or the substring `api` in the
-title. That last alternative is the leak: the structural half was added because the
-word "api" in prose swallowed every integration overview, and a page titled
-"Partner API Integration Overview" with an `Authentication` heading and no table,
-no list and no code block still classifies as T8 on the title alone.
-
-## Accuracy: 84.2% training, with no held-out split
-
-123 of 146. Before the provenance, the caveat that governs all of it: **that set
-was not held out.** The rules were tuned over four rounds against those same 146
-items, scoring the same set each round, so 84.2% is training accuracy and an
-optimistic estimate of what the rules would do on documents they have never seen.
-There is no held-out split, no cross-validation, and no second set. Nothing below
-is a generalization figure.
-
-**The label set.** 146 articles sampled from a 1,806-article enterprise knowledge
-base, labeled by four independent LLM agents. Each agent read the real article
-content, applied the written taxonomy, and never saw the classifier rules. Labels
-were emitted per article with a confidence and a one-line justification. It served
-as the tuning set and as the scoreboard at the same time, which is exactly the
-thing you are told not to do.
-
-**The tuning loop.** Four rounds. Each round: score, read the confusion matrix,
-change one or two rules, re-score.
-
-| Round | Accuracy | What changed |
-|---|---|---|
-| v0 | 67.1% | rules transcribed straight from the written taxonomy |
-| v1 | 75.3% | config gated on more than the category alone; API gated on the contract vocabulary plus a second signal; FAQ moved above API; prose defaults to concept instead of reference |
-| v2 | 82.2% | config and master guide moved above procedure; master guide keyed on size; action-verb headings win over field tables |
-| v3 | **84.2%** | spec imports and marketing prose routed to non-content; two ALL_CAPS headings imply config |
-
-**Where it is weak,** from the same run, and therefore also on the tuning set
-rather than on held-out data: API spec precision is 50% (support 7),
-master guide recall is 62% (support 8), stub recall is 71% (support 7). FAQ and
-code sample are 100% on both, but code sample has a support of 1.
-
-**Why I stopped at v3.** The remaining 23 misses are almost all one-count boundary
-singletons, plus cases the labeling agents themselves marked low confidence
-because two types plausibly fit. Editing rules to capture those would be fitting
-the 146-item set, not improving the classifier.
-
-### What that number is not
-
-- **It is not a held-out or generalization figure.** Stated again here because it
-  is the caveat most likely to be skipped: the 146 items were the tuning set. The
-  honest reading of 84.2% is "the rules fit the set they were written against this
-  well", and the true out-of-sample number is unknown and lower.
-- **You cannot reproduce it from this repository.** The label set is real content
-  from a private knowledge base, and neither the articles nor their slugs can be
-  published. The test suite here asserts *rule behavior* on hand-built
-  fingerprints, which is a different and weaker claim. If you want an accuracy
-  figure for your corpus, label a sample of your own and run `doctype score`.
-- **The ground truth is model output, not adjudicated by a human.** Four
-  independent agents reading real content is a reasonable proxy and much better
-  than one, but it is a proxy. Some of the 23 disagreements are probably the
-  labels being wrong rather than the rules.
-- **Per-type figures for the small types are anecdote.** Five of the thirteen
-  types have a support under 10, and one has a support of 1.
-- **It is one corpus.** 84.2% is this ruleset against that knowledge base. On a
-  different knowledge base, with the shipped profile and no tuning, expect
-  materially worse until you edit the profile.
-
-The code in this repository was refactored out of the original working version
-(the vocabulary was pulled out into a profile). That refactor was verified
-behavior-identical: it produces the same classification for all 1,806 documents
-and reproduces 123/146 with the same confusion matrix.
-
-## Retargeting it to your knowledge base
-
-Every literal string and threshold the rules match against lives in
-`taxonomy.Profile`, not in the rules. That is deliberate. The first version had a
-dozen strings baked in, and they were facts about one knowledge base rather than
-facts about documentation.
+### Point the vocabulary at your categories
 
 ```bash
 doctype profile > my-profile.json
 ```
 
-Edit, then pass `--profile my-profile.json`. Or in Python:
+Edit, then pass `--profile`. Or build a `Profile` and normalize it, which lowercases every vocabulary list once:
 
 ```python
 from doctype import classify, Profile
@@ -276,64 +213,52 @@ german = Profile(
 classify(fp, german)
 ```
 
-An unknown key raises rather than being ignored, because a typo'd key otherwise
-leaves the rule it was meant to configure on its default and the accuracy drop has
-no visible cause.
+Phrase lists match as case-insensitive substrings of the joined heading text, so `system variable` matches a heading `System Variable Configuration`. Tags match as whole values. The tag `not-faq` does not match `faq`.
 
-Start with these, in this order:
+Change these first:
 
-1. `release_note_categories`, `config_categories`, `internal_categories` and the
-   `*_tags` lists. Your CMS's actual names. Nothing works until these are right.
-2. `canonical_rn_headings`. Your release-note schema's section headings.
-3. `screen_words`. The default includes `claims`, which is a healthcare noun and
-   the clearest example of something to replace with your own domain's word for
-   "a table users look at".
-4. `fingerprint._is_field_table`. It looks for a bold first cell, which is an
-   authoring convention rather than a standard. If your tool marks field tables
-   differently, this is the one function to replace.
+1. `release_note_categories`, `config_categories`, `internal_categories`, and the `*_tags` lists. These are your CMS's names. Until a name matches, that category or tag rule does not fire.
+2. `canonical_rn_headings`. The section headings in your release-note schema.
+3. `screen_words`. The shipped list includes `claims`, because in the original corpus a claims grid is a screen. Replace it with your own noun for a table people look at.
+4. `fingerprint._is_field_table`, if a field table in your HTML is not bold in the first cell.
 
-## Limitations
+Two title tests are written in `classify()` and are not profile fields: the word `bundle` (with the bundle headings, this is marketing prose) and the word `template` (a skeleton only when the page is under 300 characters or contains a placeholder heading). A title like "Link an Ad Hoc Template" on a real article stays content. Version-number and UUID patterns are profile fields (`version_title_pattern`, `bare_version_pattern`, `uuid_slug_pattern`), stored as strings so they survive JSON.
 
-- **HTML only.** No Markdown, PDF or docx.
-- **English vocabulary** in the shipped profile. The rules themselves are
-  language-agnostic; the profile is not.
-- **No confidence score.** A rule fires or it does not. Since the types genuinely
-  overlap, a real number here would be useful and there isn't one.
-- **The reason string is a rule name, not an explanation.** It tells you which
-  rule fired, not which signal within a compound rule tipped it.
-- **A short document is a stub regardless of structure**, because the stub test
-  runs first. A 40-character page with a perfect field table classifies as STUB.
-  That is intentional, and it will surprise you once.
-- **Category and tag matching is exact** (case-insensitively) rather than
-  hierarchical. If your CMS nests categories, pass the top-level name in `top`.
-- **`fingerprint_many` swallows per-document errors** by design, so one bad
-  document cannot abort a corpus sweep. Check for the `error` key before
-  classifying: an errored fingerprint has no counts, every count reads as zero,
-  and it will classify as STUB.
+`profiles/default.json` is a dump of the defaults for you to copy. The package does not load that file. The defaults live on `Profile`. Regenerate the dump with `doctype profile > profiles/default.json`.
 
-## Development
+## Limits
+
+- **HTML only.** The CLI reads `.html` and `.htm`. There is no Markdown, PDF, or docx reader.
+- **The shipped vocabulary is English.** Lists and thresholds move with the profile. The words `bundle` and `template` do not; they are in the rules.
+- **No confidence score.** A rule matches or it does not. Overlapping types are resolved by order, not by a margin.
+- **The reason names the rule.** For T4, T8, and the other compound conditions, it does not identify the clause.
+- **Under 60 characters is STUB, whatever the structure.** A 40-character page with a perfect field table is a stub. The threshold is deliberately low. A thin but real page is a concept article, and calling those pages empty produced more false "broken document" reports than any other single check in the original scan.
+- **Category and tag matching is exact** after lowercasing. Nested CMS categories need the top-level name passed as `top`.
+- **Heading text stops at twenty.** A phrase that first appears on heading 21 cannot fire. The numeric heading counts still include it.
+- **One bad document does not stop a corpus sweep.** The CLI replaces undecodable bytes. `fingerprint_many` records `error` and continues. Classify that record only after you have handled the error, or it will come back STUB.
+
+## Tests
 
 ```bash
 pip install -e ".[test]"
-pytest -q          # 70 tests
+pytest -q          # 70 passed
 ```
 
-The tests assert what each rule does, using minimal hand-built fingerprints so a
-failure names the rule rather than a document. Two of them are regressions for
-bugs made while writing this package: category names being compared against the
-wrong casing, which silently killed the entire release-note branch for 41
-documents and raised nothing; and tags being substring-matched, which made a tag
-reading `not-faq` classify the document as an FAQ.
+The tests assert rule behavior on minimal fingerprints: exactly the signals one rule needs, so a failure names the rule. One parametrized case produces every code in `TYPES`. A second test fails if a code is added to the dict and left out of that list. Precedence has its own cases, including FAQ before API, config and the master guide before procedure, non-content before a how-to, and stub before an `imported` tag.
 
-If you add a rule, add a minimal case for it and a precedence case showing what it
-beats. Precedence is the design, so an untested ordering is an untested design.
+Three regressions are locked:
 
-## Background
+- Category names were compared in the CMS's original casing. The profile lowercases its lists on load, so the comparison missed, the release-note branch never opened, 41 documents fell through to other types, and nothing raised.
+- Tags were matched as substrings. A tag `not-faq` classified the page as an FAQ.
+- Compiled patterns were cached in a dict keyed by `id()`. After garbage collection, one profile could receive another profile's patterns.
 
-Built while running documentation for a healthcare SaaS platform, where it drives
-a type-aware corpus health scan over the 1,806 published articles described above.
-The taxonomy was derived empirically from that corpus rather than designed up
-front, which is why some of it looks oddly specific.
+[`.github/workflows/test.yml`](.github/workflows/test.yml) runs `pytest` on every push and pull request to `main` or `master`, on Python 3.10, 3.11, and 3.12. The package allows 3.9 and up; the workflow does not install 3.9.
+
+These tests are not the 84.2% measurement. A labeled corpus has to be yours. `doctype score --expect` is how you pin a number you computed yourself.
+
+## Provenance
+
+I built this while running documentation for a healthcare SaaS platform. It is the routing step in front of a type-aware scan of those 1,806 articles. The taxonomy was derived from that corpus, which is why a few signatures are specific to it: `claims` as a screen, Jira-epic rows as config metadata, `CDS Hooks` in the API heading list. Those strings are profile data so they can be replaced without forking the rules.
 
 ## License
 

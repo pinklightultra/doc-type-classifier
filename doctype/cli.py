@@ -1,12 +1,12 @@
 """Command line interface: classify documents, and score the rules against labels.
 
-    doctype classify docs/                     # what type is each of these?
-    doctype fingerprint docs/ -o fps.json      # cache the structural counts
-    doctype score fps.json labels.json         # how good are the rules?
+    doctype classify examples/docs/ --category-from-dir
+    doctype fingerprint examples/docs/ -o fingerprints.json
 
-``score`` is the more interesting half. The rules in this package were tuned by
-running it, reading the confusion matrix, editing one rule, and running it again;
-without a scoring loop you are just guessing which rule to change next.
+``score`` takes that fingerprint file and a labels file you supply. None ships
+in this repository. It is the more interesting half: the rules were tuned by
+running it, reading the confusion matrix, editing one rule, and running it
+again. Without that loop you are just guessing which rule to change next.
 """
 
 from __future__ import annotations

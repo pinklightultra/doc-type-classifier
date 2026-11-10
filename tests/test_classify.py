@@ -3,7 +3,7 @@
 These are hand-built fingerprints, not documents from a corpus. They assert what
 each *rule* does, which is the thing you break when you edit one. They are not a
 substitute for an accuracy measurement -- an accuracy number needs a labeled
-corpus, and that has to be your own (see the README).
+corpus, and that has to be your own (see docs/design.md).
 
 Every case here is minimal on purpose: exactly the signals needed to reach one
 rule, so a failure names the rule rather than the document.

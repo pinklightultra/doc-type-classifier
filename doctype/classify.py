@@ -23,8 +23,8 @@ so the resolution is ordered: the most specific claim wins, and precedence is
 encoded as nothing more than the order of the ``if`` statements below. Read the
 function top to bottom and you have read the whole spec.
 
-Three orderings are load-bearing and each one cost accuracy to find. The README
-lists the same three:
+Three orderings are load-bearing and each one cost accuracy to find. The same
+three are written up in ``docs/rules.md``:
 
 * Internal / non-content is tested **before everything**, because an engineering
   dump that happens to contain ordered steps is not a how-to, it is something that
@@ -40,8 +40,8 @@ lists the same three:
 84.2% (123/146) on a 146-item hand-labelled set. That set was **not** held out:
 the rules below were tuned over four rounds against it, scoring the same 146
 items each time, so this is training accuracy and an optimistic estimate of what
-it would do on documents it has never seen. There is no held-out split. See the
-README, "What that number is not", for how it was produced.
+it would do on documents it has never seen. There is no held-out split. See
+``docs/design.md``, "What 84.2% measures", for how it was produced.
 """
 
 from __future__ import annotations

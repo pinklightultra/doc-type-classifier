@@ -1,6 +1,7 @@
 """Command line interface: classify documents, and score the rules against labels.
 
     doctype classify examples/docs/ --category-from-dir
+    doctype classify examples/docs/How-To/create-a-case.html --explain
     doctype fingerprint examples/docs/ -o fingerprints.json
 
 ``score`` takes that fingerprint file and a labels file you supply. None ships
@@ -93,11 +94,20 @@ def cmd_classify(args: argparse.Namespace) -> int:
         return 1
 
     rows = []
+    explained = []
     for fp in fps:
         code, why = classify(fp, profile)
         rows.append({"path": fp.get("path", ""), "slug": fp.get("slug", ""),
                      "type": code, "name": TYPES.get(code, "?"), "reason": why,
                      "chars": fp.get("chars", 0)})
+        explained.append((fp, code, why))
+
+    if args.explain and not args.json:
+        for i, (fp, code, why) in enumerate(explained):
+            if i:
+                print()
+            _print_explain(fp, code, why)
+        return 0
 
     if args.json:
         json.dump(rows, sys.stdout, indent=1)
@@ -112,6 +122,38 @@ def cmd_classify(args: argparse.Namespace) -> int:
         print(f"  {n:5}  {code:5} {TYPES.get(code, '?')}")
     print(f"  {len(rows):5}  total")
     return 0
+
+
+def _print_explain(fp: Mapping[str, Any], code: str, why: str) -> None:
+    """The rule that fired, and the counts that rule actually reads.
+
+    There is no confidence score, and a compound rule still does not say which
+    clause matched. ``ul``, ``li``, ``img``, ``strong``, ``p``, ``h``, and ``h4``
+    are recorded by the fingerprint and then ignored, so they are not printed.
+    """
+    slug = fp.get("slug") or os.path.basename(fp.get("path") or "")
+    print(f"  {slug}")
+    print(f"  {code}  {TYPES.get(code, '?')}")
+    print(f"  {why}")
+    print()
+    print(f"  title     {fp.get('title') or ''}")
+    if fp.get("top"):
+        print(f"  category  {fp.get('top')}")
+    headings = [h for h in (fp.get("heading_txt") or []) if h]
+    print("  headings  " + (" | ".join(headings) if headings else ""))
+    print(
+        "  chars {chars}  ol {ol}  tables {tables}  fieldish_tables {fieldish}  "
+        "pre {pre}  links {links}  h2 {h2}  h3 {h3}".format(
+            chars=fp.get("chars") or 0,
+            ol=fp.get("ol") or 0,
+            tables=fp.get("tables") or 0,
+            fieldish=fp.get("fieldish_tables") or 0,
+            pre=fp.get("pre") or 0,
+            links=fp.get("links") or 0,
+            h2=fp.get("h2") or 0,
+            h3=fp.get("h3") or 0,
+        )
+    )
 
 
 def cmd_fingerprint(args: argparse.Namespace) -> int:
@@ -189,6 +231,8 @@ def build_parser() -> argparse.ArgumentParser:
     c = sub.add_parser("classify", help="classify HTML files or directories")
     c.add_argument("paths", nargs="+")
     c.add_argument("--json", action="store_true", help="emit JSON instead of a table")
+    c.add_argument("--explain", action="store_true",
+                   help="print the rule that fired and the counts it read")
     c.add_argument("--category-from-dir", action="store_true",
                    help="use each file's parent directory name as its category")
     c.set_defaults(func=cmd_classify)

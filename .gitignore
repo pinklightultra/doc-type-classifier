@@ -40,6 +40,13 @@ export/
 /docs/*
 !/docs/*.md
 
+# The README demo. Same rule as the markdown pages: the directory has to be
+# un-ignored before a file inside it can be tracked. HTML dropped here stays
+# ignored by the *.html rule above.
+!/docs/demo/
+!/docs/demo/demo.gif
+!/docs/demo/demo.tape
+
 # Your edited profile, if you keep it here. profiles/default.json is committed.
 my-profile.json
 profiles/*.json

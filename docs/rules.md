@@ -74,6 +74,12 @@ doctype classify examples/docs/
 
 Category match is exact after lowercasing. It is not hierarchical. `Release Notes` matches. `4.2 Release Notes` does not. The same flag is what makes T4's config-category branch and T12's internal-category branch reachable from the CLI.
 
+`--explain` prints the rule and the counts that rule read, instead of the summary table. It does not add a confidence score. On a compound rule it still does not say which clause matched. The counts are the ones `classify()` consults: `chars`, `ol`, `tables`, `fieldish_tables`, `pre`, `links`, `h2`, and `h3`, plus the title, the category, and the heading text.
+
+```bash
+doctype classify examples/docs/How-To/create-a-case.html --category-from-dir --explain
+```
+
 `fingerprint` exists so a corpus is parsed once. Rule edits then re-score against the JSON. Files are read as UTF-8 with or without a BOM; an undecodable byte is replaced, so one bad file does not abort the sweep. The default output name is `fingerprints.json`, which this repository gitignores. Heading text is in that file. Do not commit it for a corpus that is not yours.
 
 ```bash

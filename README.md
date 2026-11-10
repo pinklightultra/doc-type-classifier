@@ -2,6 +2,10 @@
 
 `doctype` reads one HTML documentation page and returns one of thirteen structural types, plus the name of the rule that fired.
 
+![Classifying the sample docs, then explaining one file](docs/demo/demo.gif)
+
+Re-record it from the repo root with `vhs docs/demo/demo.tape`.
+
 It is for technical writers and docs engineers who have a directory of exported articles and need to route quality checks by document shape.
 
 There is no model and no training step. There is no confidence score. A rule matches or it does not. Overlapping types are resolved by order, not by a margin. When the call is wrong, you can read the rule that misfired and edit that one rule.

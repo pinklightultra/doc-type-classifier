@@ -113,6 +113,26 @@ def test_profile_dump_round_trips(tmp_path, capsys):
     assert main(["--profile", str(path), "profile"]) == 0
 
 
+def test_explain_prints_the_rule_and_the_counts(corpus, capsys):
+    path = str(corpus / "create-a-case.html")
+    assert main(["classify", path, "--explain"]) == 0
+    out = capsys.readouterr().out
+    assert "T2  Task / Procedure" in out
+    assert "procedural (ordered steps / action headings / imperative title)" in out
+    assert "Create a Case" in out
+    assert "ol 1" in out
+    assert "total" not in out
+
+
+def test_explain_can_take_the_directory_as_category(tmp_path, capsys):
+    folder = tmp_path / "How-To"
+    folder.mkdir()
+    (folder / "create-a-case.html").write_text(PROCEDURE, encoding="utf-8")
+    assert main(["classify", str(folder / "create-a-case.html"),
+                 "--category-from-dir", "--explain"]) == 0
+    assert "category  How-To" in capsys.readouterr().out
+
+
 def test_category_from_dir(tmp_path, capsys):
     folder = tmp_path / "Release Notes"
     folder.mkdir()

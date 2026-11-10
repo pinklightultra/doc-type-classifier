@@ -32,6 +32,21 @@ export/
 !examples/docs/**/
 !examples/docs/**/*.html
 
+# Reference pages linked from the README. `docs/` above ignores the directory
+# so an export dropped here is not committed; a file inside an ignored
+# directory cannot be re-included until the directory itself is. Markdown
+# only. HTML in /docs stays ignored by the *.html rule.
+!/docs/
+/docs/*
+!/docs/*.md
+
+# The README demo. Same rule as the markdown pages: the directory has to be
+# un-ignored before a file inside it can be tracked. HTML dropped here stays
+# ignored by the *.html rule above.
+!/docs/demo/
+!/docs/demo/demo.gif
+!/docs/demo/demo.tape
+
 # Your edited profile, if you keep it here. profiles/default.json is committed.
 my-profile.json
 profiles/*.json
